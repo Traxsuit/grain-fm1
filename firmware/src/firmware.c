@@ -17,7 +17,7 @@
 #define FELUCCA_OTA_DRYRUN 0     /* 1 = stage, ask "success", then undo: no record, no reset */
 #endif
 #ifndef FELUCCA_UART
-#define FELUCCA_UART 1           /* TRS MIDI IN on UART1 / PH8 */
+#define FELUCCA_UART 0           /* TRS MIDI IN on UART1 / PH8 */
 #endif
 #define FELUCCA_CDC 0            /* (Felucca's serial console and USB audio input need its app; not in the kit) */
 #define FELUCCA_UAC 0

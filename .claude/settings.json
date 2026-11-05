@@ -1,23 +1,22 @@
 {
   "hooks": {
-    "SessionStart": [
+    "PreToolUse": [
       {
+        "matcher": "Bash|Grep",
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" 2>/dev/null; if [ -f setup/gate.py ]; then python3 setup/gate.py session; fi",
+            "command": "command -v graphify >/dev/null 2>&1 || exit 0; graphify hook-guard search",
             "timeout": 10
           }
         ]
-      }
-    ],
-    "PreToolUse": [
+      },
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "Read|Glob",
         "hooks": [
           {
             "type": "command",
-            "command": "cd \"$CLAUDE_PROJECT_DIR\" 2>/dev/null; if [ -f setup/gate.py ]; then python3 setup/gate.py guard; fi",
+            "command": "command -v graphify >/dev/null 2>&1 || exit 0; graphify hook-guard read",
             "timeout": 10
           }
         ]

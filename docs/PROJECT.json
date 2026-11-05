@@ -6,6 +6,11 @@
   "version": "0.1",
   "authors": "Stephen Webster",
   "year": 2026,
-  "features": {"trs_midi": false, "ci": true, "graphify": true},
-  "confirmed": false
+  "app_id": "0xE68193FD",
+  "features": {
+    "trs_midi": false,
+    "ci": true,
+    "graphify": true
+  },
+  "made": "2026-11-05"
 }

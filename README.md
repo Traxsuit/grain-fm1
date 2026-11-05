@@ -1,38 +1,58 @@
-# FM1-Firmware-VibeCoding-Template
+# GRAIN-FM1
 
-This is a repo-template to start your own firmware with Claude Code or Codex.
+A silent USB MIDI controller firmware for the M-VAVE FM-1 that drives Ableton Live's Granulator III with pages of knobs, a parameter overview and a grain visualiser.
 
-A repository made from it is the **FM-1 Firmware Kit** before its first step: a starting point for your own firmware on the
-**M-VAVE FM-1** pocket synthesizer, built on the platform of [Felucca](https://github.com/hugelton/Felucca)
-(Leo Kuroshita, Hügelton Instruments).
+Custom firmware for the **M-VAVE FM-1** pocket synthesizer, version 0.1, in development. What it is and how
+it plays: [docs/SPEC.md](docs/SPEC.md).
 
-It is made from an interview, not by hand:
+Built on the **FM-1 Firmware Kit**: the platform of [Felucca](https://github.com/hugelton/Felucca) (Leo Kuroshita,
+Hügelton Instruments) as [M-Vave-OP1](https://github.com/janschulten/m-vave-op1) runs it.
 
-0. **Use this template** (GitHub: "Use this template", or copy the files into a new, empty repository).
-1. **Open the new repository in Claude Code** (claude.ai/code, the desktop app or the CLI). Claude starts the interview
-   at once: what the instrument is, its sound, what the keys, buttons and knobs do, its screens, what it stores, MIDI,
-   its name and who makes it. (Until then it refuses to change any other file: `.claude/settings.json`, `setup/gate.py`.)
-2. From your answers it writes the spec (`docs/SPEC.md`) and the setup (`setup/project.json`) and asks you to confirm
-   both.
-3. Then `python3 setup/new_project.py` makes the repository: the kit moves out of `template/`, gets your firmware's
-   name, version, id, README, licence lines and options. Claude builds the first skeleton of your firmware from the
-   spec, with tests, and shows it to you in the browser emulator.
+```
+firmware/
+  hal/        header-only HAL: every register access lives here          (platform, from Felucca)
+  loader/     the update loader that writes a new app                     (platform, from Felucca; do not touch)
+  src/        boot, main loop, audio ISR, USB-MIDI, update entry, flash,  (platform)
+              display and drawing, panel map, MIDI helpers, record store
+  app/        app.h: the contract; app.c and its files: this firmware
+docs/         SPEC.md (what the firmware does), PROJECT.json (how the repository was set up)
+tests/        host tests: the platform's update path, input, USB, store; the app on a simulated FM-1
+web/          the web installer (with "Return to official V15") and the browser emulator
+tools/        build, package, install, font generators
+.claude/      Claude Code skills: fm1-platform (rules, budgets, tests, safety), graphify (code graph)
+```
 
-| Here now | What it is |
-| --- | --- |
-| `template/` | the kit: the platform (boot path, update loader, USB-MIDI, flash, display, panel, audio), a start app, tests, the web installer and emulator, tools |
-| `setup/` | the interview's gate and the generator (removed once the repository is made) |
-| `.claude/skills/` | `fm1-new-project` (the interview and the setup), `fm1-platform` (the rules for every later change), `graphify` (the code graph) |
-| `LICENSE` | GPL-3.0, as Felucca; details in `template/LICENSING.md` |
+## Build, test, try
 
-With Codex: `AGENTS.md` asks for the same interview first (without the hook that enforces it).
+```sh
+sh .claude/skills/fm1-platform/scripts/setup_env.sh --emsdk   # once: toolchain, SDK files, Emscripten
+./build.sh                                                     # build/firmware.fwsc
+tests/run_tests.sh                                             # host tests, screenshots in build/shots/
+sh web/emu/build.sh && python3 -m http.server -d build/emu 8000   # the emulator: http://localhost:8000/
+```
 
-Without an agent: write `docs/SPEC.md` and `setup/project.json` yourself (`setup/project.example.json`, the
-fields are explained at the top of `setup/new_project.py`), set `"confirmed": true`, run
-`python3 setup/new_project.py`, then follow `BUILDING.md`.
+Details: [BUILDING.md](BUILDING.md). With Claude Code, the `fm1-platform` skill holds the rules for every change.
 
-The FM-1 has one firmware bank and no recovery button: nothing is installed on a device during the setup, and the
-first install of a new firmware should be done with recovery hardware at hand (the generated README explains).
+## Safety
 
-M-VAVE and FM-1 are trademarks of their respective owners. This kit is not affiliated with or endorsed by them, nor
-by Hügelton Instruments.
+The FM-1 has **one firmware bank and no recovery button**. A firmware that does not start needs extra hardware to
+recover. So the working order is always **host tests → browser emulator → careful install**, never the reverse.
+
+- The platform keeps the ways back: the boot guard sends the unit to the chip's boot mode (`WL80UBOOT`) after two
+  failed boots; OCT− and OCT+ held 5 s does the same on purpose; the update entry accepts a new package over USB
+  while the firmware runs. Do not remove or bypass them, and do not change `firmware/loader/`, the boot guard, the
+  package identity (`FM-1_900`) or the update path.
+- Until this firmware has run on a real FM-1, have the recovery hardware at hand for an install:
+  [FM-1-transporter](https://github.com/kurogedelic/FM-1-transporter) (a Seeed XIAO RP2040 on the FM-1's USB lines,
+  which reads and writes the flash from the boot mode). Back up the flash first.
+- Way back while a firmware still starts: `python3 tools/fm1_install.py --stock`, the web installer's "Return to
+  official V15", or M-VAVE's own updater.
+
+## Licence
+
+GPL-3.0-only, as Felucca. Copyright (C) 2026 Stephen Webster; the platform: Leo Kuroshita (Hügelton Instruments) and
+the M-Vave-OP1 contributors. Keep the licence headers, credit Felucca (and M-Vave-OP1) wherever you publish, and give
+your users the source. Details and third-party parts: [LICENSING.md](LICENSING.md).
+
+M-VAVE and FM-1 are trademarks of their respective owners. This firmware is not affiliated with or endorsed by them,
+nor by Hügelton Instruments.

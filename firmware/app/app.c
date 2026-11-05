@@ -6,12 +6,12 @@
  * (SAVE stores them, power-on loads them: store.c). Replace it (the fm1-new-project
  * skill does that with you); keep the contract in app.h. */
 #ifndef APP_NAME
-#define APP_NAME "FM-1 KIT"
+#define APP_NAME "GRAIN-FM1"
 #endif
 #ifndef APP_VERSION
 #define APP_VERSION "v0.1"       /* build.py --release X.Y */
 #endif
-#define APP_ID 0x3054494Bu       /* this app's records in the store (store.c): every app its own (setup/new_project.py
+#define APP_ID 0xE68193FDu       /* this app's records in the store (store.c): every app its own (setup/new_project.py
                                   * draws one), so another firmware's data in the same flash reads as empty */
 
 /* ---------------------------------------------------------- audio (ISR) --- */

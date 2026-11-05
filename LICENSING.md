@@ -8,6 +8,7 @@ GPL-3.0-only, keeps every licence header, and credits Felucca wherever it is pub
 
 Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
 Copyright (C) 2026 M-Vave-OP1 contributors
+Copyright (C) 2026 Stephen Webster
 
 ## What is GPL-3.0-only
 
