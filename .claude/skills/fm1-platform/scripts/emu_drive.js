@@ -10,14 +10,21 @@
 const { chromium } = require('playwright');
 const fs = require('fs');
 const [url, out = 'build/emu_shots'] = process.argv.slice(2);
-const STEPS = [
+const STEPS = [   // GRAIN-FM1: overview, a knob (zoom), the zoom fading back, page 2, a key, the channel
   ['shot', 'boot'],
-  ['knob', 'KNOB 1', 3],
-  ['knob', 'KNOB 4', -2],
-  ['shot', 'knobs'],
-  ['button', 'PLAY', 600],
-  ['key', 'z', 600],
-  ['wait', 300],
+  ['knob', 'KNOB 2', 6],
+  ['shot', 'zoom'],
+  ['wait', 1900],
+  ['shot', 'dimmed'],
+  ['button', 'SCL', 300],
+  ['knob', 'KNOB 1', 10],
+  ['wait', 1700],
+  ['shot', 'page2'],
+  ['key', 'z', 400],
+  ['knob', 'PRESETS', 2],
+  ['shot', 'channel'],
+  ['button', 'PLAY', 300],
+  ['wait', 2500],
   ['shot', 'after'],
 ];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

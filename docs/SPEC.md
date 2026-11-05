@@ -42,7 +42,7 @@ made to be edited by hand.
 - **Header (top ~24 px):** page name in the page's colour, MIDI channel, octave, USB status.
 - **Overview (4 slots, 2 x 2 or 4 columns):** each slot has the parameter name, its value (the table's display
   units) and a small arc showing value within min..max in the page colour. The knob touched last is highlighted;
-  the other three are dimmed for ~2 s after a touch (all normal when idle).
+  the other three are dimmed until ~3 s after the last turn (about 1.5 s after the zoom has faded; all normal when idle).
 - **Touch zoom (overlay):** turning a knob enlarges that parameter over the overview: a large number (`AF_L`) and a
   mini graph of its recent values (the last ~2 s); it fades back after ~1.2 s without a turn.
 - **Grain visualiser (bottom strip, ~240 x 70):** a static pseudo-waveform; a playhead at Position; a band around it
@@ -50,7 +50,8 @@ made to be edited by hand.
   Size. Driven from local parameter values (read from the table by role, whatever page is shown).
 - **Overlays:** channel change, "SOON", save status.
 
-Look: dark palette; each page gets its own colour from the table (the accent of its slots, arcs and header).
+Look: the HI-CON palette (black, white text), set in `ui_init` (the platform boots in GREY, which would turn every
+mixed colour grey); each page gets its own colour from the table (its slots, arcs, header, zoom and visualiser band).
 
 ## The parameter table
 
@@ -92,6 +93,15 @@ automation and mouse edits: the in path above, already in v1. Optional downsampl
 platform's usb.c to pass a manufacturer ID (e.g. 0x7D non-commercial) SysEx to the app; that touches the update path
 and is a separate, carefully reviewed step. Alternative without SysEx: waveform as a burst of CCs/NRPNs.
 
+## Notes from the build
+
+- Incoming MIDI is taken in the audio ISR and applied by the main loop's next frame (one frame, <= ~16 ms, later).
+- A value changed on the FM-1 whose CC has not left yet loses to a CC from Live arriving in the same frame.
+- Keys held through `app_audio_stop` (an update, UBOOT) stay silent until let go, so no note-on is sent without its off.
+- The ISR-cost budget (`tests/target_budget.py`) and the firmware image need the JieLi toolchain, which this cloud
+  environment could not download (pkgman.jieliapp.com and gitee.com refused by its network policy); the host tests,
+  the sanitizer pass and the browser emulator ran.
+
 ## Open questions
 
 - Granulator III's real parameter names and which CCs to use.
@@ -104,9 +114,9 @@ Sound, on-device editing of CC/channel, sequencer/arpeggiator, MIDI clock, SysEx
 
 ## Milestones
 
-1. Skeleton: table, two pages, controls wired, CCs and notes out, overview, store; host tests for the CC mapping
+1. (done) Skeleton: table, two pages, controls wired, CCs and notes out, overview, store; host tests for the CC mapping
    (clamping, channel, one CC per frame, note-off after an octave change) and the incoming-CC hook.
-2. Touch zoom and dimming, with timing tests.
-3. Grain visualiser.
+2. (done, in the skeleton) Touch zoom and dimming, with timing tests.
+3. (done, first version) Grain visualiser; next: a real waveform once v2 sends one.
 4. Emulator walkthrough and screenshots; budgets.
 5. First hardware install, only after backup / recovery to stock V15 is walked through and the unit's version checked.
