@@ -1,0 +1,11 @@
+{
+  "name": "GRAIN-FM1",
+  "title": "GRAIN-FM1",
+  "description": "A silent USB MIDI controller firmware for the M-VAVE FM-1 that drives Ableton Live's Granulator III with pages of knobs, a parameter overview and a grain visualiser.",
+  "kind": "MIDI controller",
+  "version": "0.1",
+  "authors": "Stephen Webster",
+  "year": 2026,
+  "features": {"trs_midi": false, "ci": true, "graphify": true},
+  "confirmed": false
+}
