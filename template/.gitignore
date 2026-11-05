@@ -1,0 +1,6 @@
+build/
+.DS_Store
+__pycache__/
+*.fwsc
+!vendor/m-vave/FM-1_015.fwsc
+graphify-out/

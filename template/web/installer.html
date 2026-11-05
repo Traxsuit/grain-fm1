@@ -1,0 +1,168 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Copyright (C) 2026 Leo Kuroshita (@kurogedelic), Hügelton Instruments
+     Copyright (C) 2026 M-Vave-OP1 contributors
+     The installer page: web/make_site.py fills in the library and the metadata. Felucca's, without its backup and
+     editor. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Firmware Installer</title>
+<style>
+  :root { --bg: #fff; --fg: #000; --dim: #666; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) { --bg: #000; --fg: #fff; --dim: #999; }
+  }
+  :root[data-theme="dark"] { --bg: #000; --fg: #fff; --dim: #999; }
+  body { margin: 0; background: var(--bg); color: var(--fg);
+         font: 16px/1.6 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+  main { max-width: 520px; margin: 0 auto; padding: 48px 16px; }
+  h1 { font-size: 24px; font-weight: 600; margin: 0 0 24px; }
+  p { margin: 0 0 16px; }
+  a { color: inherit; }
+  button { font: inherit; background: var(--fg); color: var(--bg); border: 0; padding: 8px 20px; cursor: pointer; }
+  button:disabled { opacity: .3; cursor: default; }
+  #status { margin-top: 16px; min-height: 1.6em; }
+  .small { color: var(--dim); font-size: 13px; }
+  progress { width: 100%; height: 4px; margin-top: 16px; }
+  pre { color: var(--dim); font-size: 12px; white-space: pre-wrap; margin-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <h1 id="title">Firmware</h1>
+  <p>Connect the FM-1 by USB, directly to the computer. (Works in Chrome or Edge.)</p>
+  <p>Do not unplug the USB cable while writing.</p>
+  <p class="small">This is custom firmware: you use it at your own risk; there is no warranty. If an install fails and
+    the FM-1 no longer starts, recovering it needs extra hardware:
+    <a href="https://github.com/kurogedelic/FM-1-transporter" target="_blank" rel="noopener">FM-1-transporter</a>.</p>
+  <p><button id="go" disabled>Install</button></p>
+  <details style="margin-top:24px">
+    <summary>Return to official V15</summary>
+    <p class="small">Use the official V15 included here, or select an unmodified FM-1.fwsc from
+      <a href="https://www.m-vave.com/download" target="_blank" rel="noopener">M-VAVE</a>. Either is checked in this
+      browser; nothing is sent to a server. What this firmware stored on the FM-1 is not backed up.</p>
+    <p><button id="stock-builtin" type="button">Use the official V15 included here (M-VAVE, Apache-2.0)</button></p>
+    <p><label>Official FM-1.fwsc<br><input id="stock-file" type="file" accept=".fwsc"></label></p>
+    <p><button id="stock-go" disabled>Return to official V15</button></p>
+  </details>
+  <progress id="bar" max="100" value="0"></progress>
+  <p id="status"></p>
+  <pre id="log"></pre>
+  <p class="small">Built on Felucca by Leo Kuroshita (@kurogedelic), Hügelton Instruments, and M-Vave-OP1.
+    Font: Inter Tight (The Inter Project Authors, SIL OFL 1.1). The package also holds three JieLi AC79 SDK files
+    (JieLi Technology, Apache-2.0).
+    <a href="../../firmware/LICENSING.md">Licences</a>: <a href="../../firmware/LICENSE">GPL-3.0</a>,
+    <a href="../../firmware/LICENSES/">all</a>. M-VAVE and FM-1 are trademarks of their respective owners.</p>
+</main>
+<script type="module">
+/*LIB*/
+const $ = (id) => document.getElementById(id);
+const TEXT = {
+  start: "Starting", verify: "Verifying", loader: "Switching to update mode", write: "Writing",
+  reboot: "Restarting", done: "Done", stopped: "Stopped. Replug the USB cable and press Install again.",
+  error: "Error: ", nomidi: "This browser cannot do it. Open the page in Chrome or Edge.", loadfail: "Could not load: ",
+  denied: "MIDI (SysEx) access was not allowed. Allow MIDI in the site settings (address bar) and press Install again.",
+  notfound: "FM-1 not found. Check the USB cable (a data cable), close other apps that use MIDI, and press Install again.",
+  model: "The connected device is not an FM-1.",
+  lost: "The USB connection was lost. Replug it and press Install again.",
+  noloader: "The FM-1 in update mode was not found. Replug the USB cable and press Install again (it stays in update mode until it is finished).",
+  noreturn: "The FM-1 did not come back. Power-cycle it.",
+  mismatch: "Written, but the FM-1 reports another version: ",
+  badpkg: "The file to install is damaged. Reload the page.",
+  leave: "Writing. Do not close the page.",
+  stockValid: "Official V15 verified", stockError: "Cannot validate official firmware: ",
+  stockConfirm: "Return to official V15? What this firmware stored on the FM-1 is not backed up.",
+};
+const sayK = (k, arg = "") => { $("status").textContent = TEXT[k] + arg; };
+const say = (txt) => { $("status").textContent = txt; };
+const log = (t) => { $("log").textContent += t + "\n"; };
+const meta = /*META*/;
+let image = null, writing = false, stock = null, stockEpoch = 0;
+$("title").textContent = document.title = `${meta.name} ${meta.version}`;
+const lock = (on) => {
+  writing = on; $("go").disabled = on || !image; $("stock-go").disabled = on || !stock;
+  $("stock-file").disabled = on; $("stock-builtin").disabled = on || !meta.stock;
+};
+if (!meta.stock) $("stock-builtin").hidden = true;
+window.addEventListener("beforeunload", (e) => { if (writing) { e.preventDefault(); e.returnValue = TEXT.leave; } });
+
+(async () => {
+  if (!navigator.requestMIDIAccess) { sayK("nomidi"); return; }
+  try {
+    const r = await fetch(meta.pkg);
+    if (!r.ok) throw new Error(`${meta.pkg}: HTTP ${r.status}`);
+    const pkg = new Uint8Array(await r.arrayBuffer());
+    if (productOf(pkg) !== meta.product) { sayK("badpkg"); return; }
+    image = logicalImage(pkg);
+    say(`${meta.name} ${meta.version}`);
+    $("go").disabled = false;
+  } catch (e) { sayK("loadfail", e.message); }
+})();
+
+function stepper() {
+  const total = 74 + 1167;
+  return (k, a) => {
+    log(`${k} ${a ?? ""}`);
+    if (["start", "loader", "reboot"].includes(k)) sayK(k);
+    if (k === "verify") { sayK("verify"); $("bar").value = (a / total) * 100; }
+    if (k === "write") { sayK("write"); $("bar").value = ((74 + a) / total) * 100; }
+    if (k === "done") { $("bar").value = 100; sayK("done"); }
+  };
+}
+
+async function run(img, product, loaderFilter) {
+  let midi;
+  try { midi = await navigator.requestMIDIAccess({ sysex: true }); } catch (e) { sayK("denied"); return; }
+  try {
+    const up = new Updater(midi, log);
+    const ota = await up.find(loaderFilter);
+    if (ota) {                                     // an update cut short: the loader waits for the rest
+      ota.link.close();
+      sayK((await up.resume(img, stepper(), product)) ? "done" : "stopped");
+    } else {
+      await up.install(img, product, stepper());
+    }
+  } catch (e) {
+    if (e && e.code && TEXT[e.code]) sayK(e.code, e.detail || ""); else sayK("error", e && e.message);
+    log(String((e && e.stack) || e));
+  }
+}
+
+$("go").addEventListener("click", async () => {
+  if (writing) return;
+  lock(true);
+  await run(image, meta.product, (id) => /^ota-/i.test(id.model));
+  lock(false);
+});
+
+async function takeStock(bytes) {
+  const epoch = ++stockEpoch;
+  stock = null; lock(false);
+  try {
+    const verified = await validateStockPackage(bytes);
+    if (epoch !== stockEpoch) return;
+    stock = verified; sayK("stockValid"); lock(false);
+  } catch (e) { if (epoch === stockEpoch) sayK("stockError", e.message); }
+}
+$("stock-builtin").addEventListener("click", async () => {
+  try {
+    const r = await fetch(meta.stock);
+    if (!r.ok) throw new Error(`${meta.stock}: HTTP ${r.status}`);
+    await takeStock(new Uint8Array(await r.arrayBuffer()));
+  } catch (e) { sayK("stockError", e.message); }
+});
+$("stock-file").addEventListener("change", async () => {
+  const file = $("stock-file").files[0];
+  if (file) await takeStock(new Uint8Array(await file.arrayBuffer()));
+});
+$("stock-go").addEventListener("click", async () => {
+  if (!stock || writing || !confirm(TEXT.stockConfirm)) return;
+  lock(true);
+  await run(stock.image, stock.product, (id) => id.model === "ota-FM-1");
+  lock(false);
+});
+</script>
+</body>
+</html>

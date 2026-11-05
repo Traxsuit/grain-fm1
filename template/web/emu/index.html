@@ -1,0 +1,179 @@
+<!doctype html>
+<!-- SPDX-License-Identifier: GPL-3.0-only
+     Copyright (C) 2026 M-Vave-OP1 contributors
+     The browser emulator follows X0X's (charlesvestal/fm1-x0x, GPL-3.0), as M-Vave-OP1's did. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>@NAME@ Emulator</title>
+<style>
+:root { --bg: #e9e9ec; --fg: #111; --dim: #5a5a60; --body: #1d1d1f; --part: #2c2c30; --edge: #45454a;
+        --label: #d6d6d8; --lit: #fff4d6; --ink-lit: #1d1d1f; color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0d0d0f; --fg: #eee; --dim: #9a9aa0; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0d0d0f; --fg: #eee; --dim: #9a9aa0; color-scheme: dark; }
+html, body { background: var(--bg); }
+body { margin: 0; color: var(--fg); font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px 32px; }
+.device { position: relative; background: var(--body); border-radius: 18px; padding: 16px; display: grid; gap: 14px;
+          grid-template-columns: 1fr auto 1fr; align-items: start; user-select: none; -webkit-user-select: none; }
+canvas { grid-column: 2; width: min(60vw, 300px); aspect-ratio: 1; image-rendering: pixelated; background: #000;
+         border-radius: 4px; }
+.knobs { display: grid; grid-template-columns: repeat(2, auto); gap: 10px; justify-content: center; }
+.knobs.right { grid-template-columns: repeat(2, auto); }
+.knob { display: grid; justify-items: center; gap: 2px; color: var(--label); font-size: 10px; }
+.knob span { width: 44px; height: 44px; border-radius: 50%; background: var(--part); border: 2px solid var(--edge);
+             cursor: ns-resize; touch-action: none; }
+.btns { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(7, 1fr); gap: 8px; }
+button.b { font: 600 11px/1 inherit; color: var(--label); background: var(--part); border: 1px solid var(--edge);
+           border-radius: 8px; padding: 12px 0; cursor: pointer; touch-action: none; }
+button.b.lit { background: var(--lit); color: var(--ink-lit); }
+.keys { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(27, 1fr); gap: 3px; height: 96px; }
+.keys button { border: 1px solid var(--edge); border-radius: 4px; background: #0c0c0d; cursor: pointer; padding: 0;
+               touch-action: none; }
+.keys button.sharp { background: #232326; height: 70%; }
+.keys button.lit { background: var(--lit); }
+.start { position: absolute; inset: 0; display: grid; place-content: center; background: rgba(0, 0, 0, .55);
+         border-radius: 18px; }
+.start[hidden] { display: none; }
+.start button { font: inherit; font-size: 17px; padding: 12px 28px; background: #fff; color: #000; border: 0;
+                border-radius: 8px; cursor: pointer; }
+p.help, footer { color: var(--dim); text-align: center; margin: 14px 0 0; }
+kbd { font: 600 11px ui-monospace, Menlo, monospace; border: 1px solid var(--dim); border-radius: 3px; padding: 0 4px; }
+@media (max-width: 560px) {
+  .device { grid-template-columns: 1fr; }
+  canvas { grid-column: 1; justify-self: center; width: 100%; max-width: 300px; }
+  .btns { grid-template-columns: repeat(4, 1fr); }
+  .keys { grid-template-columns: repeat(14, 1fr); height: auto; grid-auto-rows: 52px; }
+}
+</style>
+</head>
+<body>
+<main>
+  <div class="device" id="device">
+    <div class="knobs" id="kl"></div>
+    <canvas id="screen" width="240" height="240" role="img" aria-label="The FM-1 screen"></canvas>
+    <div class="knobs right" id="kr"></div>
+    <div class="btns" id="btns"></div>
+    <div class="keys" id="keys"></div>
+    <div class="start" id="start"><button id="go" type="button">Switch on</button></div>
+  </div>
+  <p class="help"><kbd>Z</kbd>–<kbd>/</kbd> <kbd>Q</kbd>–<kbd>P</kbd> keys · knobs: drag up / down or scroll ·
+    <kbd>Shift</kbd>-click holds a button · MIDI IN from WebMIDI when the browser allows it</p>
+  <footer>@NAME@ @VERSION@ · <a href="https://www.gnu.org/licenses/gpl-3.0.html">GPL-3.0</a> · built on Felucca
+    (Leo Kuroshita, Hügelton Instruments) and M-Vave-OP1 · browser build after charlesvestal's X0X ·
+    M-VAVE and FM-1 are trademarks of their respective owners.</footer>
+</main>
+<script type="module">
+// panel.c's labels (bit = label) and encoder roles
+const LABELS = ["FX", "SCL", "ENV", "LFO", "EDIT", "GLO", "HOME", "SAVE", "ARP", "SEQ", "PLAY", "REC", "OCT-", "OCT+"];
+const ROLES = ["SELECT", "ALGORITHM", "PRESETS", "KNOB 1", "KNOB 2", "KNOB 3", "KNOB 4"];
+const SHARP = new Set([1, 3, 5, 8, 10, 13, 15, 17, 20, 22, 25]);   // key k = k semitones above F3
+const KEYMAP = "zsxdcfvbhnjm,l.;/q2w3e4rt6y7u8i9op";              // computer keys -> note keys 0..
+const $ = (id) => document.getElementById(id);
+let node = null, ids = [], buttons = 0, held = 0, keys = 0;
+
+function send(m) { if (node) node.port.postMessage(m); }
+function setButtons() { send({ type: "buttons", mask: buttons | held }); }
+function setKeys() { send({ type: "keys", mask: keys }); }
+
+// ------------------------------------------------------------------ controls
+for (const [box, roles] of [[$("kl"), [0, 1, 2]], [$("kr"), [3, 4, 5, 6]]])
+  for (const r of roles) {
+    const k = document.createElement("label");
+    k.className = "knob";
+    k.innerHTML = `<span role="slider" tabindex="0" aria-label="${ROLES[r]}"></span>${ROLES[r]}`;
+    const s = k.firstChild;
+    let y0 = null, acc = 0;
+    s.addEventListener("pointerdown", (e) => { y0 = e.clientY; acc = 0; s.setPointerCapture(e.pointerId); });
+    s.addEventListener("pointermove", (e) => {
+      if (y0 === null) return;
+      acc += (y0 - e.clientY) / 8; y0 = e.clientY;
+      const n = Math.trunc(acc);
+      if (n) { acc -= n; send({ type: "enc", role: r, n }); }
+    });
+    s.addEventListener("pointerup", () => { y0 = null; });
+    s.addEventListener("wheel", (e) => { e.preventDefault(); send({ type: "enc", role: r, n: e.deltaY < 0 ? 1 : -1 }); });
+    s.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowUp" || e.key === "ArrowRight") send({ type: "enc", role: r, n: 1 });
+      if (e.key === "ArrowDown" || e.key === "ArrowLeft") send({ type: "enc", role: r, n: -1 });
+    });
+    box.append(k);
+  }
+const btnEls = LABELS.map((name, b) => {
+  const e = document.createElement("button");
+  e.className = "b"; e.type = "button"; e.textContent = name;
+  e.addEventListener("pointerdown", (ev) => {
+    if (ev.shiftKey) held ^= 1 << b; else buttons |= 1 << b;
+    setButtons();
+  });
+  const up = () => { buttons &= ~(1 << b); setButtons(); };
+  e.addEventListener("pointerup", up);
+  e.addEventListener("pointerleave", up);
+  $("btns").append(e);
+  return e;
+});
+const keyEls = Array.from({ length: 27 }, (_, k) => {
+  const e = document.createElement("button");
+  e.type = "button"; e.setAttribute("aria-label", `key ${k}`);
+  if (SHARP.has(k)) e.className = "sharp";
+  e.addEventListener("pointerdown", () => { keys |= 1 << k; setKeys(); });
+  const up = () => { keys &= ~(1 << k); setKeys(); };
+  e.addEventListener("pointerup", up);
+  e.addEventListener("pointerleave", up);
+  $("keys").append(e);
+  return e;
+});
+addEventListener("keydown", (e) => {
+  const k = KEYMAP.indexOf(e.key.toLowerCase());
+  if (k >= 0 && k < 27 && !e.repeat && !e.metaKey && !e.ctrlKey) { keys |= 1 << k; setKeys(); }
+});
+addEventListener("keyup", (e) => {
+  const k = KEYMAP.indexOf(e.key.toLowerCase());
+  if (k >= 0 && k < 27) { keys &= ~(1 << k); setKeys(); }
+});
+
+// ------------------------------------------------------------------ screen, LEDs
+const ctx = $("screen").getContext("2d"), img = ctx.createImageData(240, 240);
+function draw(fb) {
+  const d = img.data;
+  for (let i = 0; i < fb.length; i++) {
+    const c = fb[i];
+    d[4 * i] = ((c >> 11) * 255) / 31; d[4 * i + 1] = (((c >> 5) & 63) * 255) / 63; d[4 * i + 2] = ((c & 31) * 255) / 31;
+    d[4 * i + 3] = 255;
+  }
+  ctx.putImageData(img, 0, 0);
+}
+function lights(leds) {
+  btnEls.forEach((e, b) => e.classList.toggle("lit", !!leds[ids[b]]));
+  keyEls.forEach((e, k) => e.classList.toggle("lit", !!leds[14 + k]));
+}
+
+// ------------------------------------------------------------------ start
+$("go").addEventListener("click", async () => {
+  $("go").disabled = true;
+  const ac = new AudioContext({ sampleRate: 44100 });
+  await ac.audioWorklet.addModule("worklet.js");
+  node = new AudioWorkletNode(ac, "fm1-emu", { outputChannelCount: [2] });
+  node.connect(ac.destination);
+  node.port.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === "ready") { ids = m.ids; $("start").hidden = true; }
+    else if (m.type === "error") $("go").textContent = "Error: " + m.message;
+    else if (m.type === "frame") { if (m.fb) draw(m.fb); if (m.leds) lights(m.leds); }
+  };
+  const wasm = await (await fetch("emu.wasm")).arrayBuffer();
+  node.port.postMessage({ type: "load", wasm }, [wasm]);
+  document.addEventListener("visibilitychange", () => send({ type: "visible", on: !document.hidden }));
+  if (navigator.requestMIDIAccess)
+    navigator.requestMIDIAccess().then((midi) => {
+      const hook = (i) => { i.onmidimessage = (e) => { if (e.data[0] < 0xF0) send({ type: "midi", data: Array.from(e.data) }); }; };
+      midi.inputs.forEach(hook);
+      midi.onstatechange = (e) => { if (e.port.type === "input") hook(e.port); };
+    }).catch(() => {});
+});
+</script>
+</body>
+</html>
